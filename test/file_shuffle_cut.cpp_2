@@ -1,0 +1,39 @@
+77         nlv.push_back(nl);
+110     // report statistics for what was done
+12 // return codes for success or failure
+17 
+95     vector<numbered_line>::const_iterator stop = start + lines_per_fragment;
+55 }
+63         return usage(argv[program_name_index], wrong_number_of_arguments);
+108     }
+86     istringstream iss (argv[fragments_index]);
+35     return result;
+97     // output fragments of shuffled text into files
+3 //          cuts them into separate files with fragments of the original text
+26     numbered_line() : number(0) {}
+53 
+61     if (argc != expected_argc) {
+31 // outputs proper usage syntax for the program
+43     ofstream ofs (filename);
+94     vector<numbered_line>::const_iterator start = nlv.begin();
+60     // check command line argument count
+101         ostringstream file_name_stream;
+71     }
+10 using namespace std;
+70         return usage(argv[program_name_index], input_file_open_failed);
+27     int number;
+59 
+30 
+41                     const char * filename)
+90     }
+54     return success;
+22 const int expected_argc = 3;
+56 
+87     iss >> fragments;
+113     cout << lines_per_fragment << " lines_per_fragment" << endl;
+24 // struct to hold a numbered line of text
+23 
+66     // check ability to open input file
+80 
+42 {
+99         if (stop > nlv.end() || fragment == fragments) stop = nlv.end();

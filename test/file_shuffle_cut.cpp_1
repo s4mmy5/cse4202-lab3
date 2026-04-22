@@ -1,0 +1,39 @@
+92     // calculate number of lines per fragment, initialize iterators
+111     cout << nlv.size() << " lines" << endl;
+46         return output_file_open_failed;
+98     for (int fragment = 1; fragment <= fragments; ++fragment) {
+9 #include <sstream>
+102         file_name_stream << argv[file_name_index] << "_" << fragment;
+64     }
+50         ofs << iter->number << " " << iter->text << endl;
+107         stop = start + lines_per_fragment;
+2 // Purpose: reads lines of a text file and numbers them, shuffles them, and
+78         nl.number++;
+37 
+8 #include <algorithm>
+29 };
+114 
+104                                       file_name_stream.str().c_str());
+49     while (iter != stop) {
+34          << " <file name> <number of fragments>" << endl;
+69         cout << "Could not open file " <<  argv[file_name_index] << endl;
+74     vector<numbered_line> nlv;
+62         // suggest how to run the program correctly
+103         int result =  write_fragment (start, stop,
+4 
+112     cout << fragments << " fragments" << endl;
+116 }
+84     // extract (and possibly reduce) number of fragments to create
+39 int write_fragment (vector<numbered_line>::const_iterator iter,
+76     while (getline(ifs, nl.text)) {
+19 const int program_name_index = 0;
+36 }
+75     numbered_line nl;
+28     string text;
+40                     vector<numbered_line>::const_iterator stop,
+109 
+0 // Program: file_shuffle_cut.cpp
+7 #include <vector>
+13 const int success = 0;
+106         start += lines_per_fragment;
+14 const int wrong_number_of_arguments = -1;

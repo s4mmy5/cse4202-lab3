@@ -1,0 +1,39 @@
+1 // Author: Chris Gill
+51         iter++;
+88     if (fragments > nlv.size()) {
+25 struct numbered_line {
+100 
+6 #include <fstream>
+93     int lines_per_fragment = nlv.size() / fragments;
+20 const int file_name_index = 1;
+52     }
+33     cout << "usage: " << program_name
+21 const int fragments_index = 2;
+67     ifstream ifs (argv[file_name_index]);
+82     random_shuffle (nlv.begin(), nlv.end());
+57 
+11 
+83 
+96 
+79     }
+47     }
+81     // shuffle the numbered lines in the vector
+68     if (!ifs) {
+18 // constants for command line indexing
+15 const int input_file_open_failed = -2;
+72 
+73     // fill a vector with numbered lines from the file
+85     int fragments;
+38 // writes out a range of lines into a named output file
+32 int usage (const char *program_name, int result) {
+45         cout << "Could not open output file " <<  filename << endl;
+58 int main (int argc, char *argv[]) {
+44     if (!ofs) {
+91 
+5 #include <iostream>
+65 
+115     return success;
+48 
+16 const int output_file_open_failed = -3;
+105         if (result != success) return result;
+89         fragments = nlv.size();
