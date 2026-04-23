@@ -1,4 +1,5 @@
 #include <err.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -11,41 +12,40 @@
 
 #define LISTEN_BACKLOG 50
 
-struct clients_list {
+typedef struct clients_list {
   size_t size;
   int *fds;
-} typedef clients_list_t;
+} clients_list_t;
 
-struct epoll_list {
+typedef struct epoll_list {
   size_t size;
   struct epoll_event *evs;
-} typedef event_list_t;
+} event_list_t;
 
-struct fragments_list {
+typedef struct fragments_list {
   size_t size;
   FILE **list;
-} typedef fragments_list_t;
+} fragments_list_t;
 
 int init_socket(void);
 int usage(void);
 void set_non_blocking_io(int fd);
+int get_fragments(fragments_list_t *fragments, FILE *in_file);
 
 int main(int argc, char *argv[]) {
   // 1. Open all required files
   FILE *in_file, *out_file;
   int sfd, cfd, epoll_fd, ret, ready;
+  char *line = NULL;
+  size_t line_len = 0;
   struct sockaddr_in peer_addr = {0};
   socklen_t peer_addr_size = 0;
   clients_list_t clients = {0};
-  fragments_list_t fragments = {0};
-  char *fragment_filename = NULL;
-  char *line = NULL;
-  size_t line_len = 0;
   struct epoll_event ev = {0};
   event_list_t revents = {0};
   clients.fds = NULL;
-  fragments.list = NULL;
   revents.evs = NULL;
+  fragments_list_t fragments;
 
   if (argc != 2)
     return usage();
@@ -71,22 +71,8 @@ int main(int argc, char *argv[]) {
     err(EXIT_FAILURE, "fopen");
   }
 
-  while (-1 != getline(&line, &line_len, in_file)) {
-    fragments.list =
-        realloc(fragments.list, (++fragments.size) * sizeof(FILE *));
-
-    if (NULL == fragments.list) {
-      printf("Could not allocate fragments array\n");
-      err(EXIT_FAILURE, "realloc");
-    }
-
-    line[strcspn(line, "\n")] = '\0';
-    fragments.list[fragments.size - 1] = fopen(line, "r");
-
-    if (NULL == fragments.list[fragments.size - 1]) {
-      printf("Could not open fragment file %zu\n", fragments.size);
-      err(EXIT_FAILURE, "fopen");
-    }
+  if (0 != get_fragments(&fragments, in_file)) {
+    err(EXIT_FAILURE, "get_fragments");
   }
 
   // initialize epoll fd
@@ -186,4 +172,30 @@ void set_non_blocking_io(int fd) {
   flags = fcntl(fd, F_GETFL, 0);
   flags |= O_NONBLOCK;
   fcntl(fd, F_SETFL, flags);
+}
+
+int get_fragments(fragments_list_t *fragments, FILE *in_file) {
+  char *line = NULL;
+  size_t line_len = 0;
+  fragments->list = NULL;
+
+  while (-1 != getline(&line, &line_len, in_file)) {
+    fragments->list =
+        realloc(fragments->list, sizeof(FILE *) * (++fragments->size));
+
+    if (NULL == fragments->list) {
+      printf("Could not allocate fragments array\n");
+      return EAGAIN;
+    }
+
+    line[strcspn(line, "\n")] = '\0';
+    fragments->list[fragments->size - 1] = fopen(line, "r");
+
+    if (NULL == fragments->list[fragments->size - 1]) {
+      printf("Could not open fragment file %zu\n", fragments->size);
+      return EBADF;
+    }
+  }
+
+  return 0;
 }
