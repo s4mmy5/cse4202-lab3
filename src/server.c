@@ -89,6 +89,13 @@ int main(int argc, char *argv[]) {
 
   // wait for connections
   while ((ready = epoll_wait(epoll_fd, revents, epollfd_count, -1)) != -1) {
+    for (int i = 0; i < ready; i++) {
+      if (revents[i].data.fd == sfd) {
+        // accept connections on server socket
+      } else {
+        // interact with client
+      }
+    }
   }
 }
 
