@@ -1,4 +1,5 @@
 #include <err.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -10,6 +11,21 @@
 
 #define LISTEN_BACKLOG 50
 
+struct clients_list {
+  size_t size;
+  int *fds;
+} typedef clients_list_t;
+
+struct epoll_list {
+  size_t size;
+  struct epoll_event *evs;
+} typedef event_list_t;
+
+struct fragments_list {
+  size_t size;
+  FILE **list;
+} typedef fragments_list_t;
+
 int init_socket(void);
 int usage(void);
 void set_non_blocking_io(int fd);
@@ -17,15 +33,19 @@ void set_non_blocking_io(int fd);
 int main(int argc, char *argv[]) {
   // 1. Open all required files
   FILE *in_file, *out_file;
-  int sfd, epoll_fd, ret, ready;
-  FILE **fragments = NULL;
-  int fragments_cnt = 0;
-  char *line = NULL;
+  int sfd, cfd, epoll_fd, ret, ready;
+  struct sockaddr_in peer_addr = {0};
+  socklen_t peer_addr_size = 0;
+  clients_list_t clients = {0};
+  fragments_list_t fragments = {0};
   char *fragment_filename = NULL;
+  char *line = NULL;
   size_t line_len = 0;
-  struct epoll_event ev = NULL;
-  struct epoll_event *revents = NULL;
-  int epollfd_count = 0;
+  struct epoll_event ev = {0};
+  event_list_t revents = {0};
+  clients.fds = NULL;
+  fragments.list = NULL;
+  revents.evs = NULL;
 
   if (argc != 2)
     return usage();
@@ -42,26 +62,29 @@ int main(int argc, char *argv[]) {
     err(EXIT_FAILURE, "getline");
   }
 
-  if (NULL == (out_file = fopen(
-                   line, "w"))) // open output file and truncate old contents
+  // drop newline
+  line[strcspn(line, "\n")] = '\0';
+  out_file = fopen(line, "w");
+  if (NULL == out_file) // open output file and truncate old contents
   {
     printf("Could not open output file");
     err(EXIT_FAILURE, "fopen");
   }
 
   while (-1 != getline(&line, &line_len, in_file)) {
-    fragments = realloc(fragments, (++fragments_cnt) * sizeof(FILE *));
+    fragments.list =
+        realloc(fragments.list, (++fragments.size) * sizeof(FILE *));
 
-    if (NULL == fragments) {
+    if (NULL == fragments.list) {
       printf("Could not allocate fragments array\n");
       err(EXIT_FAILURE, "realloc");
     }
 
     line[strcspn(line, "\n")] = '\0';
-    fragments[fragments_cnt - 1] = fopen(line, "r");
+    fragments.list[fragments.size - 1] = fopen(line, "r");
 
-    if (NULL == fragments[fragments_cnt - 1]) {
-      printf("Could not open fragment file %d\n", fragments_cnt);
+    if (NULL == fragments.list[fragments.size - 1]) {
+      printf("Could not open fragment file %zu\n", fragments.size);
       err(EXIT_FAILURE, "fopen");
     }
   }
@@ -82,16 +105,37 @@ int main(int argc, char *argv[]) {
     err(EXIT_FAILURE, "epoll_ctl");
   }
 
-  revents = realloc(revents, sizeof(struct epoll_event) * ++epollfd_count);
+  revents.evs =
+      realloc(revents.evs, sizeof(struct epoll_event) * ++revents.size);
 
-  // set non blocking readers
+  // set non blocking socket
   set_non_blocking_io(sfd);
 
   // wait for connections
-  while ((ready = epoll_wait(epoll_fd, revents, epollfd_count, -1)) != -1) {
+  while ((ready = epoll_wait(epoll_fd, revents.evs, revents.size, -1)) != -1) {
     for (int i = 0; i < ready; i++) {
-      if (revents[i].data.fd == sfd) {
+      if (revents.evs[i].data.fd == sfd) {
         // accept connections on server socket
+        cfd = accept(sfd, (struct sockaddr *)&peer_addr, &peer_addr_size);
+        if (cfd == -1)
+          err(EXIT_FAILURE, "accept");
+
+        // add to client list
+        clients.fds =
+            realloc(clients.fds, sizeof(clients.fds) * ++clients.size);
+        clients.fds[clients.size - 1] = cfd;
+
+        // initialize socket pollfd
+        ev.events = EPOLLIN | EPOLLRDHUP;
+        ev.data.fd = cfd;
+        ret = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cfd, &ev);
+        if (-1 == ret) {
+          err(EXIT_FAILURE, "epoll_ctl");
+        }
+        revents.evs =
+            realloc(revents.evs, sizeof(struct epoll_event) * ++revents.size);
+
+        set_non_blocking_io(cfd);
       } else {
         // interact with client
       }
