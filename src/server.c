@@ -13,17 +13,17 @@
 #define LISTEN_BACKLOG 50
 
 typedef struct clients_list {
-  size_t size;
+  ssize_t size;
   int *fds;
 } clients_list_t;
 
 typedef struct epoll_list {
-  size_t size;
+  ssize_t size;
   struct epoll_event *evs;
 } event_list_t;
 
 typedef struct fragments_list {
-  size_t size;
+  ssize_t size;
   FILE **list;
 } fragments_list_t;
 
@@ -192,7 +192,7 @@ int get_fragments(fragments_list_t *fragments, FILE *in_file) {
     fragments->list[fragments->size - 1] = fopen(line, "r");
 
     if (NULL == fragments->list[fragments->size - 1]) {
-      printf("Could not open fragment file %zu\n", fragments->size);
+      printf("Could not open fragment file %zd\n", fragments->size);
       return EBADF;
     }
   }
