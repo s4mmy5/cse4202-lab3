@@ -1,0 +1,50 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-Iinclude",
+      "-c",
+      "-o",
+      "obj/server.o",
+      "src/server.c"
+    ],
+    "directory": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3",
+    "file": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3/src/server.c",
+    "output": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3/obj/server.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-Iinclude",
+      "-c",
+      "-o",
+      "obj/common.o",
+      "src/common.c"
+    ],
+    "directory": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3",
+    "file": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3/src/common.c",
+    "output": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3/obj/common.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-Iinclude",
+      "-c",
+      "-o",
+      "obj/client.o",
+      "src/client.c"
+    ],
+    "directory": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3",
+    "file": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3/src/client.c",
+    "output": "/home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3/obj/client.o"
+  }
+]

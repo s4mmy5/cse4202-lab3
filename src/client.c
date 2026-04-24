@@ -1,3 +1,4 @@
+#include "common.h"
 #include <arpa/inet.h>
 #include <err.h>
 #include <fcntl.h>
@@ -10,17 +11,6 @@
 
 // TODO Implement better sorting than insertion sort
 
-typedef struct fragment_line {
-  ssize_t file_pos;
-  size_t line_len;
-  char *line;
-} fragment_line_t;
-
-typedef struct lines_vec {
-  ssize_t len;
-  fragment_line_t *vec;
-} lines_vec_t;
-
 enum {
   PROGRAM_NAME,
   HOST_NAME,
@@ -28,14 +18,11 @@ enum {
 };
 
 int init_client(char *ip, char *port);
-int usage(void);
-void set_non_blocking_io(int fd);
 void insertion_sort(lines_vec_t *lines);
-void print_file_pos(lines_vec_t *lines);
 
 int main(int argc, char *argv[]) {
-  int sfd;
-  FILE *s_fp;
+  int fd;
+  FILE *r_fp;
   lines_vec_t lines = {0};
 
   ssize_t last_pos = -1;
@@ -45,20 +32,21 @@ int main(int argc, char *argv[]) {
     return usage();
   }
 
-  sfd = init_client(argv[HOST_NAME], argv[SERV_NAME]);
-  if (-1 == sfd) {
+  fd = init_client(argv[HOST_NAME], argv[SERV_NAME]);
+  if (-1 == fd) {
     err(EXIT_FAILURE, "init_client");
   }
 
   // create FILE stream
-  s_fp = fdopen(sfd, "r+");
-  if (NULL == s_fp) {
+  r_fp = fdopen(fd, "r");
+  if (NULL == r_fp) {
     err(EXIT_FAILURE, "fdopen");
   }
 
   // client will receive EOF on end of transmission.
-  fscanf(s_fp, "%zd", &last_pos);
-  while (last_pos != EOF) {
+  fscanf(r_fp, "%zd", &last_pos);
+  while (last_pos != -1) {
+    printf("last_pos=%zd\n", last_pos);
     // increase lines capacity
     lines.vec = realloc(lines.vec, sizeof(fragment_line_t) * ++lines.len);
     fragment_line_t *last_line = &lines.vec[lines.len - 1];
@@ -66,20 +54,27 @@ int main(int argc, char *argv[]) {
     // init line
     last_line->file_pos = last_pos;
     last_line->line = NULL;
-    last_line->line_len = 0;
+    last_line->len = 0;
 
-    if (-1 == getline(&last_line->line, &last_line->line_len, s_fp)) {
+    size_t cap = 0;
+    if (-1 == (last_line->len = getline(&last_line->line, &cap, r_fp))) {
       printf("Could not get fragment line from socket\n");
       err(EXIT_FAILURE, "getline");
     }
-
-    fscanf(s_fp, "%zd", &last_pos);
+    fscanf(r_fp, "%zd", &last_pos);
   }
 
   print_file_pos(&lines);
   // sort lines
   insertion_sort(&lines);
   print_file_pos(&lines);
+
+  // send lines
+  for (int i = 0; i < lines.len; ++i) {
+    // TODO:
+    // https://stackoverflow.com/questions/8257714/how-can-i-convert-an-int-to-a-string-in-c#8257728
+    char pos_str[11];
+  }
 
   /* Cleanup */
   // free lines
@@ -90,24 +85,9 @@ int main(int argc, char *argv[]) {
   free(lines.vec);
 
   // close socket
-  fclose(s_fp);
+  fclose(r_fp);
 
   return EXIT_SUCCESS;
-}
-
-void set_non_blocking_io(int fd) {
-  int flags;
-
-  flags = fcntl(fd, F_GETFL, 0);
-  flags |= O_NONBLOCK;
-  fcntl(fd, F_SETFL, flags);
-}
-
-int usage(void) {
-  printf("./server <server_ip> <server_port>\n"
-         "server_ip: the numeric internet address that reaches the server.\n"
-         "server_port: the numeric port that the server is running on \n");
-  return EXIT_FAILURE;
 }
 
 int init_client(char *ip, char *port) {
@@ -141,8 +121,8 @@ int init_client(char *ip, char *port) {
 
   // free addr_info struct
   freeaddrinfo(info);
+
   // prevent blocking on input output
-  /* set_non_blocking_io(sfd); */
   return sfd;
 }
 
@@ -158,10 +138,9 @@ void insertion_sort(lines_vec_t *lines) {
   }
 }
 
-void print_file_pos(lines_vec_t *lines) {
-  printf("Lines count=%zd\n", lines->len);
-  for (ssize_t i = 0; i < lines->len; ++i) {
-    printf("Idx=%02zd, File_pos=%02zd\n", i, lines->vec[i].file_pos);
-    printf("Contents=%s\n", lines->vec[i].line);
-  }
+int usage(void) {
+  printf("./client <server_ip> <server_port>\n"
+         "server_ip: the numeric internet address that reaches the server.\n"
+         "server_port: the numeric port that the server is running on \n");
+  return EXIT_FAILURE;
 }
