@@ -133,6 +133,7 @@ int main(int argc, char *argv[]) {
         }
       } else {
         if (revents.evs[i].events & EPOLLOUT) {
+
           // find client_idx. FIXME change to binary search if possible
           int client_idx;
           for (client_idx = 0; client_idx < clients.size; ++client_idx) {
@@ -143,7 +144,6 @@ int main(int argc, char *argv[]) {
           client_t *curr_client = &clients.vec[client_idx];
           if (!curr_client->sorting) {
             // client needs fragments
-            fragment_line_t last_line;
 
             // init line
             char *line = NULL;
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
             // send delimiter
             safe_send(curr_client->fd, "-1\n", 2);
 
-            free(last_line.line);
+            free(line);
             if (ferror(curr_client->fragments_file)) {
               err(EXIT_FAILURE, "ferror");
             }

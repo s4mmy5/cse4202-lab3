@@ -11,6 +11,8 @@
 
 // TODO Implement better sorting than insertion sort
 
+#define INT_STR_SIZE 64
+
 enum {
   PROGRAM_NAME,
   HOST_NAME,
@@ -46,7 +48,6 @@ int main(int argc, char *argv[]) {
   // client will receive EOF on end of transmission.
   fscanf(r_fp, "%zd", &last_pos);
   while (last_pos != -1) {
-    printf("last_pos=%zd\n", last_pos);
     // increase lines capacity
     lines.vec = realloc(lines.vec, sizeof(fragment_line_t) * ++lines.len);
     fragment_line_t *last_line = &lines.vec[lines.len - 1];
@@ -64,16 +65,20 @@ int main(int argc, char *argv[]) {
     fscanf(r_fp, "%zd", &last_pos);
   }
 
-  print_file_pos(&lines);
   // sort lines
   insertion_sort(&lines);
-  print_file_pos(&lines);
 
   // send lines
   for (int i = 0; i < lines.len; ++i) {
-    // TODO:
-    // https://stackoverflow.com/questions/8257714/how-can-i-convert-an-int-to-a-string-in-c#8257728
-    char pos_str[11];
+    char line_pos[INT_STR_SIZE];
+    ssize_t len =
+        snprintf(line_pos, INT_STR_SIZE, "%zd", lines.vec[i].file_pos);
+    if (0 > len) {
+      err(EXIT_FAILURE, "snprintf");
+    }
+
+    safe_send(fd, line_pos, len);
+    safe_send(fd, lines.vec[i].line, lines.vec[i].len);
   }
 
   /* Cleanup */
