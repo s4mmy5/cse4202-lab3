@@ -48,14 +48,12 @@ int main(int argc, char *argv[]) {
   // client will receive EOF on end of transmission.
   fscanf(r_fp, "%zd", &last_pos);
   while (last_pos != -1) {
-    // increase lines capacity
-    lines.vec = realloc(lines.vec, sizeof(fragment_line_t) * ++lines.len);
-    fragment_line_t *last_line = &lines.vec[lines.len - 1];
-
-    // init line
-    last_line->file_pos = last_pos;
-    last_line->line = NULL;
-    last_line->len = 0;
+    fragment_line_t *last_line = NULL;
+    if (0 != (last_line = add_line(
+                  &lines, (fragment_line_t){
+                              .file_pos = last_pos, .line = NULL, .len = 0}))) {
+      err(EXIT_FAILURE, "add_line");
+    };
 
     size_t cap = 0;
     if (-1 == (last_line->len = getline(&last_line->line, &cap, r_fp))) {
@@ -69,7 +67,7 @@ int main(int argc, char *argv[]) {
   insertion_sort(&lines);
 
   // send lines
-  for (int i = 0; i < lines.len; ++i) {
+  for (int i = 0; i < lines.size; ++i) {
     char line_pos[INT_STR_SIZE];
     ssize_t len =
         snprintf(line_pos, INT_STR_SIZE, "%zd", lines.vec[i].file_pos);
@@ -83,7 +81,7 @@ int main(int argc, char *argv[]) {
 
   /* Cleanup */
   // free lines
-  for (int i = 0; i < lines.len; ++i) {
+  for (int i = 0; i < lines.size; ++i) {
     free(lines.vec[i].line);
   }
   // free lines array
@@ -132,7 +130,7 @@ int init_client(char *ip, char *port) {
 }
 
 void insertion_sort(lines_vec_t *lines) {
-  for (ssize_t i = 1; i < lines->len; ++i) {
+  for (ssize_t i = 1; i < lines->size; ++i) {
     fragment_line_t anker = lines->vec[i];
     ssize_t j = i - 1;
     while (j >= 0 && lines->vec[j].file_pos > anker.file_pos) {

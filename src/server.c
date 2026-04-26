@@ -20,7 +20,7 @@ typedef struct epoll_list {
 
 typedef struct client {
   int sorting;
-  int fd;
+  int remote_fd;
   FILE *fragments_file;
 } client_t;
 
@@ -32,18 +32,25 @@ typedef struct clients_list {
 int init_socket(void);
 int init_clients_list(clients_list_t *clients, FILE *in_file);
 
+/* For now just use a burst model where all data from a fragment is sent at
+ * once or not. FIXME: Next implement version where reads and writes are
+ * interleaved. */
+
 int main(int argc, char *argv[]) {
   // 1. Open all required files
   FILE *in_file, *out_file;
   int sfd, cfd, epoll_fd, ret, ready;
   char *line = NULL;
   size_t line_len = 0;
+  size_t lines_sent = 0;
   ssize_t registered_clients = 0;
   struct sockaddr_in peer_addr = {0};
   socklen_t peer_addr_size = 0;
   clients_list_t clients = {0};
   struct epoll_event ev = {0};
   event_list_t revents = {0};
+  lines_vec_t sorted_lines = {0};
+  sorted_lines.vec = NULL;
   clients.vec = NULL;
   revents.evs = NULL;
   revents.size = 0;
@@ -110,7 +117,7 @@ int main(int argc, char *argv[]) {
         set_non_blocking_io(cfd);
 
         // add FILE* to client list
-        clients.vec[registered_clients++].fd = cfd;
+        clients.vec[registered_clients++].remote_fd = cfd;
         printf("Registered client %zd\n", registered_clients);
 
         // initialize client pollfd
@@ -132,54 +139,70 @@ int main(int argc, char *argv[]) {
           }
         }
       } else {
-        if (revents.evs[i].events & EPOLLOUT) {
+        // find client_idx. FIXME change to binary search if possible
+        int client_idx;
+        for (client_idx = 0; client_idx < clients.size; ++client_idx) {
+          if (clients.vec[client_idx].remote_fd ==
+              revents.evs[client_idx].data.fd)
+            break;
+        }
+        client_t *curr_client = &clients.vec[client_idx];
 
-          // find client_idx. FIXME change to binary search if possible
-          int client_idx;
-          for (client_idx = 0; client_idx < clients.size; ++client_idx) {
-            if (clients.vec[client_idx].fd == revents.evs[client_idx].data.fd)
-              break;
+        if (revents.evs[i].events & EPOLLOUT) {
+          // send client unsorted fragments
+          char *line = NULL;
+          size_t cap = 0;
+          ssize_t len = 0;
+
+          // read line from file and send
+          while (-1 !=
+                 (len = getline(&line, &cap, curr_client->fragments_file))) {
+            safe_send(curr_client->remote_fd, line, len);
+            lines_sent++;
           }
 
-          client_t *curr_client = &clients.vec[client_idx];
-          if (!curr_client->sorting) {
-            // client needs fragments
+          // delimit end of message
+          safe_send(curr_client->remote_fd, "-1\n", 2);
 
-            // init line
-            char *line = NULL;
-            size_t cap = 0;
-            ssize_t len = 0;
+          // detect reading errors
+          if (ferror(curr_client->fragments_file)) {
+            printf("Error reading from fragment file %d",
+                   curr_client->remote_fd);
+            err(EXIT_FAILURE, "ferror");
+          }
 
-            while (-1 !=
-                   (len = getline(&line, &cap, curr_client->fragments_file))) {
-              safe_send(curr_client->fd, line, len);
-            }
+          // clean up
+          free(line);
+          fclose(curr_client->fragments_file);
 
-            // send delimiter
-            safe_send(curr_client->fd, "-1\n", 2);
-
-            free(line);
-            if (ferror(curr_client->fragments_file)) {
-              err(EXIT_FAILURE, "ferror");
-            }
-
-            // remove EPOLLOUT from watched events
-            ev.events = EPOLLIN | EPOLLRDHUP;
-            ev.data.fd = cfd;
-            ret = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_client->fd, &ev);
-            if (-1 == ret) {
-              err(EXIT_FAILURE, "epoll_ctl");
-            }
-
-            // close socket
-            close(curr_client->fd);
+          // remove EPOLLOUT from watched events
+          ev.events = EPOLLIN | EPOLLRDHUP;
+          ev.data.fd = cfd;
+          ret = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_client->remote_fd, &ev);
+          if (-1 == ret) {
+            err(EXIT_FAILURE, "epoll_ctl");
           }
         }
         if (revents.evs[i].events & EPOLLIN) {
+          // do the merge step when clients send data back
+          // open FILE * to use getline()
+          FILE *reader_fp = fdopen(curr_client->remote_fd, "r");
+
+          char *line = NULL;
+          size_t cap = 0;
+          ssize_t len = 0;
+
+          while (-1 != (len = getline(&line, &cap, reader_fp))) {
+            // TODO: add line and keep sorted property. Needs new data structure
+          }
+        }
+        if (revents.evs[i].events & EPOLLRDHUP) {
         }
       }
     }
   }
+
+  close(sfd);
 }
 
 int init_socket(void) {
