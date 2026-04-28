@@ -1,12 +1,13 @@
 ##
 # Lab 3: Multiplexed I/O Server
 #
-# Source using claude.ai
+# I suck at Makefiles so this was created with help of Claude Sonnet 4.6.
+# Prompt: Provide a basic makefile for a c project. Place headers in ./include and source files in ./src
 #
 # @file
 # @version 0.1
 CC      = gcc
-CFLAGS  = -Wall -Wextra -O0 -g -I$(INC_DIR)
+CFLAGS  = -Wall -Wextra -g -I$(INC_DIR)
 LDFLAGS =
 
 SRC_DIR = src
@@ -14,8 +15,8 @@ OBJ_DIR = obj
 BIN_DIR = bin
 INC_DIR = include
 
-SERVER_SRC = $(SRC_DIR)/server.c $(SRC_DIR)/common.c
-CLIENT_SRC = $(SRC_DIR)/client.c $(SRC_DIR)/common.c
+SERVER_SRC = $(SRC_DIR)/server.c $(SRC_DIR)/common.c $(SRC_DIR)/minheap.c
+CLIENT_SRC = $(SRC_DIR)/client.c $(SRC_DIR)/common.c $(SRC_DIR)/minheap.c
 
 SERVER_OBJ = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SERVER_SRC))
 CLIENT_OBJ = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(CLIENT_SRC))

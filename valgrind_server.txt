@@ -1,0 +1,77 @@
+==59019== Memcheck, a memory error detector
+==59019== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==59019== Using Valgrind-3.26.0-218cee2feb-20251024 and LibVEX; rerun with -h for copyright info
+==59019== Command: ./server input_file.txt
+==59019== Parent PID: 58891
+==59019== 
+--59019-- 
+--59019-- Valgrind options:
+--59019--    --leak-check=full
+--59019--    --show-leak-kinds=all
+--59019--    --track-origins=yes
+--59019--    --verbose
+--59019--    --log-file=valgrind-out.txt
+--59019-- Contents of /proc/version:
+--59019--   Linux version 6.19.13-400.asahi.fc43.aarch64+16k (mockbuild@7c2fd5c2e3084fc2abc9e9f402d312a7) (gcc (GCC) 15.2.1 20260123 (Red Hat 15.2.1-7), GNU ld version 2.45.1-4.fc43) #1 SMP PREEMPT_DYNAMIC Mon Apr 20 15:18:52 UTC 2026
+--59019-- 
+--59019-- Arch and hwcaps: ARM64, LittleEndian, v8-fhm-dpbcvadp-sha3-rdm-i8mm-atomics-bf16-fp16-vfp16
+--59019-- Page sizes: currently 16384, max supported 65536
+--59019-- Valgrind library directory: /usr/libexec/valgrind
+--59019-- Reading syms from /home/sammy/Nextcloud/college/Classes/2026/Spring/CSE4202/labs/cse4202-lab3/tests/server
+--59019-- Reading syms from /usr/lib/ld-linux-aarch64.so.1
+--59019-- Reading syms from /usr/libexec/valgrind/memcheck-arm64-linux
+--59019--    object doesn't have a dynamic symbol table
+--59019-- Scheduler: using generic scheduler lock implementation.
+--59019-- Reading suppressions file: /usr/libexec/valgrind/default.supp
+==59019== embedded gdbserver: reading from /tmp/vgdb-pipe-from-vgdb-to-59019-by-sammy-on-ramanujan
+==59019== embedded gdbserver: writing to   /tmp/vgdb-pipe-to-vgdb-from-59019-by-sammy-on-ramanujan
+==59019== embedded gdbserver: shared mem   /tmp/vgdb-pipe-shared-mem-vgdb-59019-by-sammy-on-ramanujan
+==59019== 
+==59019== TO CONTROL THIS PROCESS USING vgdb (which you probably
+==59019== don't want to do, unless you know exactly what you're doing,
+==59019== or are doing some strange experiment):
+==59019==   /usr/libexec/valgrind/../../bin/vgdb --pid=59019 ...command...
+==59019== 
+==59019== TO DEBUG THIS PROCESS USING GDB: start GDB like this
+==59019==   /path/to/gdb ./server
+==59019== and then give GDB the following command
+==59019==   target remote | /usr/libexec/valgrind/../../bin/vgdb --pid=59019
+==59019== --pid is optional if only one valgrind process is running
+==59019== 
+==59019== Downloading debug info for /usr/libexec/valgrind/memcheck-arm64-linux...
+--59019--   Considering /home/sammy/.cache/debuginfod_client/d8f0b83a5b06f667d790999b52f4b97c4cdf2d35/debuginfo ..
+--59019--   .. CRC is valid
+==59019== Successfully downloaded debug file for /usr/libexec/valgrind/memcheck-arm64-linux
+==59019== Downloading debug info for /home/sammy/.cache/debuginfod_client/d8f0b83a5b06f667d790999b52f4b97c4cdf2d35/debuginfo...
+--59019--   Considering /home/sammy/.cache/debuginfod_client/c49e1cce2ab424fef4a9b8db2762e7fbbf3e2745/debuginfo ..
+--59019--   .. build-id is valid
+==59019== Successfully downloaded debug file for /home/sammy/.cache/debuginfod_client/d8f0b83a5b06f667d790999b52f4b97c4cdf2d35/debuginfo
+--59019-- REDIR: 0x401eb00 (ld-linux-aarch64.so.1:strlen) redirected to 0x581d7090 (vgPlain_arm64_linux_REDIR_FOR_strlen)
+--59019-- REDIR: 0x401e0c0 (ld-linux-aarch64.so.1:strcmp) redirected to 0x581d70e4 (vgPlain_arm64_linux_REDIR_FOR_strcmp)
+--59019-- REDIR: 0x401e000 (ld-linux-aarch64.so.1:index) redirected to 0x581d70b8 (vgPlain_arm64_linux_REDIR_FOR_index)
+--59019-- Reading syms from /usr/libexec/valgrind/vgpreload_core-arm64-linux.so
+--59019-- Reading syms from /usr/libexec/valgrind/vgpreload_memcheck-arm64-linux.so
+--59019-- Reading syms from /usr/lib64/libc.so.6
+==59019== Downloading debug info for /usr/lib64/libc.so.6...
+--59019--   Considering /home/sammy/.cache/debuginfod_client/bd9fa318978314e1b3b1fd1585e0269a03ca704d/debuginfo ..
+--59019--   .. CRC is valid
+==59019== Successfully downloaded debug file for /usr/lib64/libc.so.6
+--59019-- REDIR: 0x4985fe0 (libc.so.6:memchr) redirected to 0x48507b8 (_vgnU_ifunc_wrapper)
+--59019-- REDIR: 0x4989a80 (libc.so.6:strlen) redirected to 0x48507b8 (_vgnU_ifunc_wrapper)
+--59019-- REDIR: 0x498a040 (libc.so.6:rindex) redirected to 0x488e424 (rindex)
+--59019-- REDIR: 0x4981c8c (libc.so.6:malloc) redirected to 0x4885550 (malloc)
+--59019-- REDIR: 0x498a900 (libc.so.6:strstr) redirected to 0x4894a8c (strstr)
+--59019-- REDIR: 0x4982464 (libc.so.6:free) redirected to 0x4888754 (free)
+--59019-- REDIR: 0x498cfc0 (libc.so.6:__GI_memchr) redirected to 0x4890550 (__GI_memchr)
+--59019-- REDIR: 0x498d540 (libc.so.6:__GI_memcpy) redirected to 0x4891130 (__GI_memcpy)
+--59019-- REDIR: 0x4987ac0 (libc.so.6:strchrnul) redirected to 0x4894148 (strchrnul)
+--59019-- REDIR: 0x498e780 (libc.so.6:__GI_strlen) redirected to 0x488ede8 (__GI_strlen)
+--59019-- REDIR: 0x49828c4 (libc.so.6:realloc) redirected to 0x488cc44 (realloc)
+==59019== 
+==59019== HEAP SUMMARY:
+==59019==     in use at exit: 0 bytes in 0 blocks
+==59019==   total heap usage: 152 allocs, 152 frees, 72,984 bytes allocated
+==59019== 
+==59019== All heap blocks were freed -- no leaks are possible
+==59019== 
+==59019== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

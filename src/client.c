@@ -1,4 +1,5 @@
 #include "common.h"
+#include "minheap.h"
 #include <arpa/inet.h>
 #include <err.h>
 #include <fcntl.h>
@@ -8,10 +9,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-
-// TODO Implement better sorting than insertion sort
-
-#define INT_STR_SIZE 64
+#include <string.h>
 
 enum {
   PROGRAM_NAME,
@@ -20,12 +18,11 @@ enum {
 };
 
 int init_client(char *ip, char *port);
-void insertion_sort(lines_vec_t *lines);
 
 int main(int argc, char *argv[]) {
   int fd;
   FILE *r_fp;
-  lines_vec_t lines = {0};
+  line_vec_t lines = {0};
 
   ssize_t last_pos = -1;
   lines.vec = NULL;
@@ -41,49 +38,48 @@ int main(int argc, char *argv[]) {
 
   // create FILE stream
   r_fp = fdopen(fd, "r");
+  setbuf(r_fp, NULL);
   if (NULL == r_fp) {
     err(EXIT_FAILURE, "fdopen");
   }
 
-  // client will receive EOF on end of transmission.
+  // client will receive INVALID_FILE_POS on end of transmission.
   fscanf(r_fp, "%zd", &last_pos);
-  while (last_pos != -1) {
-    fragment_line_t *last_line = NULL;
-    if (0 != (last_line = add_line(
-                  &lines, (fragment_line_t){
-                              .file_pos = last_pos, .line = NULL, .len = 0}))) {
-      err(EXIT_FAILURE, "add_line");
-    };
+  while (last_pos != INVALID_FILE_POS) {
+    line_t new_line = {.file_pos = last_pos, .line = NULL, .len = 0};
 
     size_t cap = 0;
-    if (-1 == (last_line->len = getline(&last_line->line, &cap, r_fp))) {
+    if (-1 == (new_line.len = getline(&new_line.line, &cap, r_fp))) {
       printf("Could not get fragment line from socket\n");
       err(EXIT_FAILURE, "getline");
     }
+
+    if (NULL == insert_line(&lines, new_line)) {
+      err(EXIT_FAILURE, "add_line");
+    };
+
     fscanf(r_fp, "%zd", &last_pos);
   }
+  printf("RECEIVED\n");
 
-  // sort lines
-  insertion_sort(&lines);
-
-  // send lines
-  for (int i = 0; i < lines.size; ++i) {
+  line_t curr_line;
+  while ((curr_line = get_min(&lines)).file_pos != INVALID_FILE_POS) {
     char line_pos[INT_STR_SIZE];
-    ssize_t len =
-        snprintf(line_pos, INT_STR_SIZE, "%zd", lines.vec[i].file_pos);
+    ssize_t len = snprintf(line_pos, INT_STR_SIZE, "%zd", curr_line.file_pos);
     if (0 > len) {
       err(EXIT_FAILURE, "snprintf");
     }
 
     safe_send(fd, line_pos, len);
-    safe_send(fd, lines.vec[i].line, lines.vec[i].len);
+    safe_send(fd, curr_line.line, curr_line.len);
+    printf("Sent line: file_pos=%s, line=%s\n", line_pos, curr_line.line);
+    free(curr_line.line);
   }
+  // delimit end of message
+  safe_send(fd, EOF_STR, strlen(EOF_STR));
+  printf("SENT\n");
 
   /* Cleanup */
-  // free lines
-  for (int i = 0; i < lines.size; ++i) {
-    free(lines.vec[i].line);
-  }
   // free lines array
   free(lines.vec);
 
@@ -127,18 +123,6 @@ int init_client(char *ip, char *port) {
 
   // prevent blocking on input output
   return sfd;
-}
-
-void insertion_sort(lines_vec_t *lines) {
-  for (ssize_t i = 1; i < lines->size; ++i) {
-    fragment_line_t anker = lines->vec[i];
-    ssize_t j = i - 1;
-    while (j >= 0 && lines->vec[j].file_pos > anker.file_pos) {
-      lines->vec[j + 1] = lines->vec[j];
-      --j;
-    }
-    lines->vec[j + 1] = anker;
-  }
 }
 
 int usage(void) {

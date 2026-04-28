@@ -1,4 +1,5 @@
 #include "common.h"
+#include "minheap.h"
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -13,195 +14,201 @@
 
 #define LISTEN_BACKLOG 50
 
-typedef struct epoll_list {
+enum {
+  ENOFRAGS = 1,
+  EGETLINE = 1,
+};
+
+typedef struct event_pair {
+  int fd;
+  FILE *frag_file;
+} event_pair_t;
+
+typedef struct event_list {
   ssize_t size;
-  struct epoll_event *evs;
+  struct epoll_event *vec;
 } event_list_t;
 
-typedef struct client {
-  int sorting;
-  int remote_fd;
-  FILE *fragments_file;
-} client_t;
-
-typedef struct clients_list {
-  ssize_t size;
-  client_t *vec;
-} clients_list_t;
-
 int init_socket(void);
-int init_clients_list(clients_list_t *clients, FILE *in_file);
-
-/* For now just use a burst model where all data from a fragment is sent at
- * once or not. FIXME: Next implement version where reads and writes are
- * interleaved. */
+int count_lines(FILE *in);
+int grow_events(event_list_t *events);
+FILE *get_file(FILE *in_file, char *mode);
+void skip_lines(FILE *in_file, int n);
 
 int main(int argc, char *argv[]) {
-  // 1. Open all required files
-  FILE *in_file, *out_file;
-  int sfd, cfd, epoll_fd, ret, ready;
-  char *line = NULL;
-  size_t line_len = 0;
-  size_t lines_sent = 0;
+  ssize_t registered_epollfds = 0;
   ssize_t registered_clients = 0;
-  struct sockaddr_in peer_addr = {0};
-  socklen_t peer_addr_size = 0;
-  clients_list_t clients = {0};
-  struct epoll_event ev = {0};
-  event_list_t revents = {0};
-  lines_vec_t sorted_lines = {0};
-  sorted_lines.vec = NULL;
-  clients.vec = NULL;
-  revents.evs = NULL;
-  revents.size = 0;
+  line_vec_t sorted_lines = {.vec = NULL, .size = 0, .capacity = 0};
 
   if (argc != 2)
     return usage();
 
+  FILE *in_file;
   if (NULL == (in_file = fopen(argv[1], "r"))) {
     printf("Could not open input file\n");
     usage();
     err(EXIT_FAILURE, "fopen");
   }
 
-  if (-1 == getline(&line, &line_len, in_file)) // get output file name
-  {
-    printf("Input file is emtpy\n");
-    err(EXIT_FAILURE, "getline");
-  }
+  int frag_count = count_lines(in_file) - 1;
 
-  // drop newline
-  line[strcspn(line, "\n")] = '\0';
-  out_file = fopen(line, "w");
-  free(line);
-
-  if (NULL == out_file) // open output file and truncate old contents
-  {
-    printf("Could not open output file");
-    err(EXIT_FAILURE, "fopen");
-  }
-
-  if (0 != init_clients_list(&clients, in_file)) {
-    err(EXIT_FAILURE, "init_clients_list");
-  }
+  rewind(in_file);        // prepare for getting fragment files later
+  skip_lines(in_file, 1); // skip output file line
 
   // initialize epoll fd
+  int ret, epoll_fd;
   epoll_fd = epoll_create1(0);
   if (-1 == epoll_fd) {
     err(EXIT_FAILURE, "epoll_create1");
   }
 
   // 2. Connect with all clients
-  sfd = init_socket();
+  int sfd = init_socket();
   // set non blocking socket
   set_non_blocking_io(sfd);
 
   // initialize socket epoll_event
+  struct epoll_event ev = {0};
   ev.events = EPOLLIN;
-  ev.data.fd = sfd;
+  ev.data.ptr = &(event_pair_t){.fd = sfd, .frag_file = NULL};
   if (-1 == epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sfd, &ev)) {
     err(EXIT_FAILURE, "epoll_ctl");
   }
+  registered_epollfds++;
 
-  revents.evs =
-      realloc(revents.evs, sizeof(struct epoll_event) * ++revents.size);
+  // for receiving event notifications
+  event_list_t revents = {.vec = NULL, .size = 0};
+  grow_events(&revents);
+
   // wait for connections
-  while (-1 != (ready = epoll_wait(epoll_fd, revents.evs, revents.size, -1))) {
+  int ready = 0;
+  while (-1 != (ready = epoll_wait(epoll_fd, revents.vec, revents.size, -1))) {
     for (int i = 0; i < ready; i++) {
-      if (revents.evs[i].data.fd == sfd) {
+      if (((event_pair_t *)(revents.vec[i].data.ptr))->fd == sfd) {
         // accept connections on server socket
-        cfd = accept(sfd, (struct sockaddr *)&peer_addr, &peer_addr_size);
+        struct sockaddr_in peer_addr = {0};
+        socklen_t peer_addr_size = 0;
+        int cfd = accept(sfd, (struct sockaddr *)&peer_addr, &peer_addr_size);
         if (cfd == -1)
           err(EXIT_FAILURE, "accept");
 
-        set_non_blocking_io(cfd);
+        /* set_non_blocking_io(cfd); */
 
-        // add FILE* to client list
-        clients.vec[registered_clients++].remote_fd = cfd;
-        printf("Registered client %zd\n", registered_clients);
+        printf("Registered client %zd\n", ++registered_clients);
 
         // initialize client pollfd
         ev.events = EPOLLIN | EPOLLOUT | EPOLLRDHUP;
-        ev.data.fd = cfd;
+        ev.data.ptr = &(event_pair_t){.fd = cfd, .frag_file = NULL};
         ret = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cfd, &ev);
+        registered_epollfds++;
         if (-1 == ret) {
           err(EXIT_FAILURE, "epoll_ctl");
         }
 
-        revents.evs =
-            realloc(revents.evs, sizeof(struct epoll_event) * ++revents.size);
+        grow_events(&revents);
 
-        // if we are done registering clients remove sfd from epoll
-        if (registered_clients == clients.size) {
+        if (registered_clients == frag_count) {
           ret = epoll_ctl(epoll_fd, EPOLL_CTL_DEL, sfd, NULL);
+          registered_epollfds--;
           if (-1 == ret) {
             err(EXIT_FAILURE, "epoll_ctl");
           }
         }
       } else {
-        // find client_idx. FIXME change to binary search if possible
-        int client_idx;
-        for (client_idx = 0; client_idx < clients.size; ++client_idx) {
-          if (clients.vec[client_idx].remote_fd ==
-              revents.evs[client_idx].data.fd)
-            break;
-        }
-        client_t *curr_client = &clients.vec[client_idx];
+        // work on client
+        event_pair_t *client_pair = (event_pair_t *)ev.data.ptr;
+        if (revents.vec[i].events & EPOLLOUT) {
+          // get a fragment_file
+          if (NULL == client_pair->frag_file) {
+            client_pair->frag_file = get_file(in_file, "r");
+          }
 
-        if (revents.evs[i].events & EPOLLOUT) {
-          // send client unsorted fragments
           char *line = NULL;
           size_t cap = 0;
           ssize_t len = 0;
-
           // read line from file and send
-          while (-1 !=
-                 (len = getline(&line, &cap, curr_client->fragments_file))) {
-            safe_send(curr_client->remote_fd, line, len);
-            lines_sent++;
+          while (-1 != (len = getline(&line, &cap, client_pair->frag_file))) {
+            safe_send(client_pair->fd, line, len);
           }
 
           // delimit end of message
-          safe_send(curr_client->remote_fd, "-1\n", 2);
-
-          // detect reading errors
-          if (ferror(curr_client->fragments_file)) {
-            printf("Error reading from fragment file %d",
-                   curr_client->remote_fd);
-            err(EXIT_FAILURE, "ferror");
-          }
+          safe_send(client_pair->fd, EOF_STR, strlen(EOF_STR));
 
           // clean up
           free(line);
-          fclose(curr_client->fragments_file);
+          fclose(client_pair->frag_file);
 
           // remove EPOLLOUT from watched events
           ev.events = EPOLLIN | EPOLLRDHUP;
-          ev.data.fd = cfd;
-          ret = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_client->remote_fd, &ev);
+          ret = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_pair->fd, &ev);
           if (-1 == ret) {
             err(EXIT_FAILURE, "epoll_ctl");
           }
-        }
-        if (revents.evs[i].events & EPOLLIN) {
-          // do the merge step when clients send data back
-          // open FILE * to use getline()
-          FILE *reader_fp = fdopen(curr_client->remote_fd, "r");
+        } else if (revents.vec[i].events & EPOLLIN) {
+          // duplicate file descriptor to use streams and be able to close them
+          // later.
+          int dup_client = dup(client_pair->fd);
+          FILE *reader_fp = fdopen(dup_client, "r");
 
-          char *line = NULL;
-          size_t cap = 0;
-          ssize_t len = 0;
+          ssize_t last_pos = -1;
+          // client will receive INVALID_FILE_POS on end of transmission.
+          fscanf(reader_fp, "%zd", &last_pos);
+          while (last_pos != INVALID_FILE_POS) {
+            line_t last_line = {.file_pos = last_pos, .line = NULL, .len = 0};
 
-          while (-1 != (len = getline(&line, &cap, reader_fp))) {
-            // TODO: add line and keep sorted property. Needs new data structure
+            size_t cap = 0;
+            if (-1 ==
+                (last_line.len = getline(&last_line.line, &cap, reader_fp))) {
+              printf("Could not get fragment line from socket\n");
+              err(EXIT_FAILURE, "getline");
+            }
+
+            if (NULL == insert_line(&sorted_lines, last_line)) {
+              err(EXIT_FAILURE, "insert_line");
+            };
+
+            fscanf(reader_fp, "%zd", &last_pos);
           }
-        }
-        if (revents.evs[i].events & EPOLLRDHUP) {
+
+          // remove EPOLLIN from watched events
+          ev.events = EPOLLRDHUP;
+          ret = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_pair->fd, &ev);
+          if (-1 == ret) {
+            err(EXIT_FAILURE, "epoll_ctl");
+          }
+
+          /* Cleanup */
+          fclose(reader_fp);
+        } else if (revents.vec[i].events & EPOLLRDHUP) {
+          ret = epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_pair->fd, NULL);
+          registered_epollfds--;
+          if (-1 == ret) {
+            err(EXIT_FAILURE, "epoll_ctl");
+          }
+
+          close(client_pair->fd);
         }
       }
     }
+    if (registered_epollfds == 0)
+      break;
   }
 
+  rewind(in_file);
+  FILE *out_file =
+      get_file(in_file, "w"); // first line should be the output file
+  // write to output file and clean up lines
+  line_t curr_line = {0};
+  while ((curr_line = get_min(&sorted_lines)).file_pos != INVALID_FILE_POS) {
+    fprintf(out_file, "%zd%s", curr_line.file_pos, curr_line.line);
+    free(curr_line.line);
+  }
+
+  /* Cleanup */
+  fclose(in_file);
+  fclose(out_file);
+  free(sorted_lines.vec);
+  free(revents.vec);
   close(sfd);
 }
 
@@ -236,37 +243,60 @@ int init_socket(void) {
   return sfd;
 }
 
-int init_clients_list(clients_list_t *clients, FILE *in_file) {
+// Reads the next line in in_file, interprets it as a file path then creates and
+// returns the associated FILE *
+FILE *get_file(FILE *in_file, char *mode) {
   char *line = NULL;
   size_t line_len = 0;
-  clients->vec = NULL;
+  size_t cap = 0;
 
-  while (-1 != getline(&line, &line_len, in_file)) {
-    clients->vec = realloc(clients->vec, sizeof(client_t) * (++clients->size));
-
-    if (NULL == clients->vec) {
-      printf("Could not allocate clients array\n");
-      return -EAGAIN;
-    }
-
-    line[strcspn(line, "\n")] = '\0';
-    clients->vec[clients->size - 1].fragments_file = fopen(line, "r");
-
-    if (NULL == clients->vec[clients->size - 1].fragments_file) {
-      printf("Could not open fragment file %zd\n", clients->size);
-      return -EBADF;
-    }
+  line_len = getline(&line, &cap, in_file);
+  if ((size_t)(-1) == line_len) {
+    printf("Failed to get new fragment\n");
+    return NULL;
   }
+
+  // drop newline
+  line[line_len - 1] = '\0';
+  FILE *fd = fopen(line, mode);
   free(line);
 
-  if (ferror(in_file)) {
-    return -EBADF;
+  return fd;
+}
+
+int count_lines(FILE *in) {
+  char c;
+  int count = 0;
+  while ((c = fgetc(in)) != (char)EOF) {
+    if (c == '\n')
+      ++count;
   }
-  return 0;
+  return count;
 }
 
 int usage(void) {
   printf("./server <input_file> \n"
          "input_file: a file containing fragment file names\n");
   return EXIT_FAILURE;
+}
+
+int grow_events(event_list_t *events) {
+  if (NULL == (events->vec = realloc(events->vec, sizeof(struct epoll_event) *
+                                                      ++events->size)))
+    return -1;
+
+  return 0;
+}
+
+void skip_lines(FILE *in_file, int n) {
+  char *buf = NULL;
+  size_t len = 0;
+
+  for (int i = 0; i < n; i++) {
+    if (-1 == getline(&buf, &len, in_file)) {
+      break;
+    }
+  }
+
+  free(buf);
 }
