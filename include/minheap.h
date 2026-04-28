@@ -2,9 +2,6 @@
 #define MINHEAP_H
 #include "common.h"
 
-// Modified version of my CSE247 minheap implementation.
-// https://github.com/wustl-cse247-sp25/m7-lab-JobaHD/blob/master/src/labcode/heaps/MinHeap.java#L328
-
 #define INVALID_FILE_POS -1
 
 static inline size_t get_left_child(ssize_t idx) { return 2 * idx + 1; }

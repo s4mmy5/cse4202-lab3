@@ -13,10 +13,11 @@
 #include <unistd.h>
 
 #define LISTEN_BACKLOG 50
+#define EXPECTED_ARGS 2
 
 enum {
-  ENOFRAGS = 1,
-  EGETLINE = 1,
+  PROGRAM_NAME,
+  INPUT_FILE,
 };
 
 typedef struct event_pair {
@@ -35,16 +36,32 @@ int grow_events(event_list_t *events);
 FILE *get_file(FILE *in_file, char *mode);
 void skip_lines(FILE *in_file, int n);
 
+/* Server component for CSE 4202 Lab 3
+ *
+ * This purpose of this server is to dispatch sorting tasks to connected
+ * clients. It is provided with spec file that contains:
+ *
+ * 1. An output file
+ * 2. N fragment files with indexed lines.
+ *
+ * The job of this server is to assign each connected client a fragment file and
+ * send all contained lines. Once this is done the server expects the clients to
+ * send back a sorted version of the fragment file. Which the server will piece
+ * together with the other received fragments into a completely sorted file
+ * which will be written to the provided output file.
+ *
+ */
+
 int main(int argc, char *argv[]) {
   ssize_t registered_epollfds = 0;
   ssize_t registered_clients = 0;
   line_vec_t sorted_lines = {.vec = NULL, .size = 0, .capacity = 0};
 
-  if (argc != 2)
+  if (argc != EXPECTED_ARGS)
     return usage();
 
   FILE *in_file;
-  if (NULL == (in_file = fopen(argv[1], "r"))) {
+  if (NULL == (in_file = fopen(argv[INPUT_FILE], "r"))) {
     printf("Could not open input file\n");
     usage();
     err(EXIT_FAILURE, "fopen");
@@ -92,8 +109,6 @@ int main(int argc, char *argv[]) {
         if (cfd == -1)
           err(EXIT_FAILURE, "accept");
 
-        /* set_non_blocking_io(cfd); */
-
         printf("Registered client %zd\n", ++registered_clients);
 
         // initialize client pollfd
@@ -134,7 +149,7 @@ int main(int argc, char *argv[]) {
           // delimit end of message
           safe_send(client_pair->fd, EOF_STR, strlen(EOF_STR));
 
-          // clean up
+          /* Clean up */
           free(line);
           fclose(client_pair->frag_file);
 
@@ -177,7 +192,7 @@ int main(int argc, char *argv[]) {
             err(EXIT_FAILURE, "epoll_ctl");
           }
 
-          /* Cleanup */
+          /* Clean up */
           fclose(reader_fp);
         } else if (revents.vec[i].events & EPOLLRDHUP) {
           ret = epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_pair->fd, NULL);
@@ -200,11 +215,12 @@ int main(int argc, char *argv[]) {
   // write to output file and clean up lines
   line_t curr_line = {0};
   while ((curr_line = get_min(&sorted_lines)).file_pos != INVALID_FILE_POS) {
-    fprintf(out_file, "%zd%s", curr_line.file_pos, curr_line.line);
+    fprintf(out_file, "%s",
+            curr_line.line + 1); // +1 skips spaces kept due to parsing file_pos
     free(curr_line.line);
   }
 
-  /* Cleanup */
+  /* Clean up */
   fclose(in_file);
   fclose(out_file);
   free(sorted_lines.vec);
@@ -212,6 +228,7 @@ int main(int argc, char *argv[]) {
   close(sfd);
 }
 
+// contains all the boilerplate to initiate a socket
 int init_socket(void) {
   int sfd;
   char server_host[NI_MAXHOST], server_serv[NI_MAXSERV];
@@ -264,6 +281,7 @@ FILE *get_file(FILE *in_file, char *mode) {
   return fd;
 }
 
+// counts line inside FILE*. Keep in mind it modifies the offset.
 int count_lines(FILE *in) {
   char c;
   int count = 0;
@@ -274,12 +292,14 @@ int count_lines(FILE *in) {
   return count;
 }
 
+// prints out useful usage info.
 int usage(void) {
   printf("./server <input_file> \n"
          "input_file: a file containing fragment file names\n");
   return EXIT_FAILURE;
 }
 
+// grows the event_list_t array by 1 epoll_event
 int grow_events(event_list_t *events) {
   if (NULL == (events->vec = realloc(events->vec, sizeof(struct epoll_event) *
                                                       ++events->size)))
@@ -288,6 +308,7 @@ int grow_events(event_list_t *events) {
   return 0;
 }
 
+// skips n lines in the given FILE *
 void skip_lines(FILE *in_file, int n) {
   char *buf = NULL;
   size_t len = 0;

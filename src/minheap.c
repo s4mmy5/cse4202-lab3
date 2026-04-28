@@ -1,8 +1,16 @@
 #include "minheap.h"
 #include <stdio.h>
 
-// Modified version of my CSE247 minheap implementation.
-// https://github.com/wustl-cse247-sp25/m7-lab-JobaHD/blob/master/src/labcode/heaps/MinHeap.java#L328
+/* Modified version of my CSE247 minheap implementation.
+ * https://github.com/wustl-cse247-sp25/m7-lab-JobaHD/blob/master/src/labcode/heaps/MinHeap.java#L328
+ *
+ * Since it is a fairly standard implementation. Most of these functions are not
+ * accompanied with a commented explanation. For more implementation details
+ * refer to the provided link. Which is a bit more readable.
+ *
+ * NOTE: This implementation does not support removeAtIndex(). Since that is not
+ * necessary for the server-client application.
+ */
 
 void swap(line_vec_t *lines, size_t i, size_t j) {
   line_t tmp = lines->vec[j];

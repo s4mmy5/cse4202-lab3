@@ -3,4 +3,34 @@
 * Contributors
 - Jonathan Rodriguez Gomez <j.rodriguezgomez@wustl.edu>
 
-*
+* Server Design
+The server is the most extensive piece of code of this project. The most significant pieces that make it up are:
+
+1. A epoll multiplexing mechanism.
+2. A Min Heap-Backed data structure.
+
+** The epoll multiplexing mechanism
+The purpose of the epoll multiplexing code is to provide exploit the distributed architecture of this system. It provides a way for the server to interleave reading and writing loops without obtuse polling code. The reason I chose this implementation over ~poll()~ or ~select()~ is two-fold. First, the interface for providing epoll_event data is much more easier to integrate, since we can provide a struct pointer and store pretty much arbitrary data along with an event. Second, the performance of ~epoll~ dwarfs the alternatives.
+
+** A Min Heap backed data structure
+Refer to [[Why a Min Heap]].
+
+* Client Design
+The client is a simple front-end for a Min-Heap implementation.  The main components to keep in mind are the reading and writing loop which is pretty much identical to the one provided in the server component.
+
+* Why a Min Heap
+The decision for a Min-heap as opposed to a BST was due to the lower memory footprint, better cache affinity and the lack of a requirement to provide a structure that maintains the ordering when reading from it.
+
+I also must admit a Min-heap is much easier to implement.
+
+* Dynamic Memory
+Both the server and client components make extensive use of dynamic memory so I have provided valgrind reports to attest their robustness.
+
+* Build Instructions
+To build issue ~make all~ and find the created binaries in ~./bin~. NOTE: The server component takes the input files relative to the current directory of the server; either put server is the same directory as the input files or specify the input file paths correctly.
+
+* Testing and Evaluation
+The testing phase of this lab was not very complicated. I used the provided ~file_shuffle_cut.cpp~ program to test a few different files using different fragment counts. As mentioned in [[Dynamic Memory]] I also made extensive use of Valgrind to check for memory errors.
+
+* Development Effort
+Hours Spent: ~15 hours

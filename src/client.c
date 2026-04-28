@@ -7,9 +7,11 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <string.h>
+
+#define EXPECTED_ARGS 3
 
 enum {
   PROGRAM_NAME,
@@ -19,6 +21,14 @@ enum {
 
 int init_client(char *ip, char *port);
 
+/* Client component for CSE 4202 Lab 3
+ *
+ * This purpose of this client is to sort data received from an orchestrating
+ * server. The client will sort said data and promptly provide it back to the
+ * server.
+ *
+ */
+
 int main(int argc, char *argv[]) {
   int fd;
   FILE *r_fp;
@@ -27,7 +37,7 @@ int main(int argc, char *argv[]) {
   ssize_t last_pos = -1;
   lines.vec = NULL;
 
-  if (argc != 3) {
+  if (argc != EXPECTED_ARGS) {
     return usage();
   }
 
@@ -79,7 +89,7 @@ int main(int argc, char *argv[]) {
   safe_send(fd, EOF_STR, strlen(EOF_STR));
   printf("SENT\n");
 
-  /* Cleanup */
+  /* Clean up */
   // free lines array
   free(lines.vec);
 
